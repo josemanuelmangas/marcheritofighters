@@ -59,9 +59,9 @@ const OUT = '#140c0a';
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 // Buffer a media resolución -> aspecto pixel art al escalar sin suavizado
-const buf = document.createElement('canvas'); buf.width = W / 2; buf.height = H / 2;
+const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
 const bx = buf.getContext('2d');
-const bgC = document.createElement('canvas'); bgC.width = W / 2; bgC.height = H / 2;
+const bgC = document.createElement('canvas'); bgC.width = W; bgC.height = H;
 
 function fit() {
   const dock=document.getElementById('touchDock');
@@ -228,11 +228,13 @@ function updateTouchUi(){
 //  Datos de ataques (fotogramas a 60 fps; cajas en coords locales mirando a la derecha)
 // ---------------------------------------------------------------------
 const ATTACKS = {
-  punch:  { startup: 4, active: 4, recovery: 9,  box: { x: 22, y: -162, w: 72, h: 28 }, dmg: 6,  hs: 14, bs: 9,  kb: 5, lvl: 'mid',  pose: 'punch' },
-  kick:   { startup: 8, active: 5, recovery: 16, box: { x: 18, y: -120, w: 94, h: 34 }, dmg: 11, hs: 20, bs: 13, kb: 9, lvl: 'mid',  pose: 'kick', heavy: true },
-  cpunch: { startup: 4, active: 4, recovery: 9,  box: { x: 24, y: -104, w: 68, h: 28 }, dmg: 5,  hs: 13, bs: 8,  kb: 4, lvl: 'mid',  pose: 'cpunch' },
-  ckick:  { startup: 7, active: 5, recovery: 18, box: { x: 14, y: -48,  w: 98, h: 32 }, dmg: 9,  hs: 18, bs: 12, kb: 7, lvl: 'low',  pose: 'ckick', heavy: true },
-  jkick:  { startup: 5, active: 16, recovery: 0, box: { x: 10, y: -72,  w: 74, h: 54 }, dmg: 10, hs: 18, bs: 12, kb: 6, lvl: 'over', pose: 'jkick', heavy: true }
+  punch:   { startup: 4, active: 4, recovery: 9,  box: { x: 22, y: -162, w: 72, h: 28 }, dmg: 6,  hs: 14, bs: 9,  kb: 5, lvl: 'mid',  pose: 'punch' },
+  kick:    { startup: 8, active: 5, recovery: 16, box: { x: 18, y: -120, w: 94, h: 34 }, dmg: 11, hs: 20, bs: 13, kb: 9, lvl: 'mid',  pose: 'kick', heavy: true },
+  cpunch:  { startup: 4, active: 4, recovery: 9,  box: { x: 24, y: -104, w: 68, h: 28 }, dmg: 5,  hs: 13, bs: 8,  kb: 4, lvl: 'mid',  pose: 'cpunch' },
+  ckick:   { startup: 7, active: 5, recovery: 18, box: { x: 14, y: -48,  w: 98, h: 32 }, dmg: 9,  hs: 18, bs: 12, kb: 7, lvl: 'low',  pose: 'ckick', heavy: true },
+  jkick:   { startup: 5, active: 16, recovery: 0,  box: { x: 10, y: -72,  w: 74, h: 54 }, dmg: 10, hs: 18, bs: 12, kb: 6, lvl: 'over', pose: 'jkick', heavy: true },
+  uppercut:{ startup: 5, active: 12, recovery: 10, box: { x: 8, y: -182, w: 80, h: 122 }, dmg: 15, hs: 24, bs: 11, kb: 9, lvl: 'mid', poseStart: 'charge', pose: 'uppercut', heavy: true, launchVy: -15.5, launchVx: 4.8, cool: 60, moveName: '¡GOLPE ASCENDENTE!' },
+  spin:    { startup: 6, active: 14, recovery: 16, box: { x: 14, y: -124, w: 110, h: 60 }, dmg: 14, hs: 20, bs: 12, kb: 10, lvl: 'mid', poseStart: 'charge', pose: 'spin', heavy: true, dash: 8.5, cool: 55, moveName: '¡GIRO TORNADO!' }
 };
 
 // ---------------------------------------------------------------------
@@ -297,7 +299,7 @@ const ROSTER = [RYU, VAQUERO, CAMARERO, SOLDADO, FUEGO, CALAVERA];
 // Orden: reposo, avanzar, puñetazo, patada, defensa agachada, salto/ataque aéreo.
 const SPRITE_NAMES = ['dragon','vaquero','patron','comando','fuego','calavera'];
 const spriteSheets = SPRITE_NAMES.map(name => Array.from({length:6},(_,i)=>{
-  const im=new Image(); im.src=`sprites/${name}_${i}.png`;return im;
+  const im=new Image(); im.src=`sprites_hd/${name}_${i}.png`;return im;
 }));
 function spriteFor(def,index=0) {const i=ROSTER.indexOf(def);return spriteSheets[Math.max(0,i)]?.[index];}
 function validSprite(im){return im && im.complete && im.naturalWidth>0;}
@@ -305,16 +307,62 @@ function spritePose(f){
   if(f.state==='ko'||f.stunType==='hit')return 4;
   if(f.atk){
     const t=f.atk.type;
+    if(t==='uppercut')return 5;
+    if(t==='spin')return f.atk.t < f.atk.d.startup ? 1 : 3;
     if(t==='jkick')return 5;
     if(t==='kick'||t==='ckick')return 3;
     if(t==='cpunch'||t==='punch')return 2;
-    if(t==='special')return f.def.special==='rush'?5:2;
+    if(t==='special')return f.def.special==='rush' ? (f.atk.t < f.atk.d.startup ? 1 : 5) : (f.atk.t < f.atk.d.startup ? 0 : 2);
   }
   if(!f.onGround)return 5;
+  if(f.landT>0)return 4;
   if(f.crouch||f.stunType==='block'||(f.holdBack&&!f.walking))return 4;
-  if(f.walking)return 1;
-  if(f.winPose)return 2;
+  if(f.walking)return (Math.floor(f.animT/8)%2) ? 1 : 0;
+  if(f.winPose)return (Math.floor(f.animT/18)%2) ? 2 : 0;
   return 0;
+}
+function spriteAnimData(f){
+  const index=spritePose(f);
+  let rot=0,dx=0,dy=0,sx=1,sy=1;
+  if(!f.atk&&f.onGround&&!f.crouch){
+    const b=Math.sin(f.animT*0.09);
+    dy += b*1.6;
+    sx += b*0.01;
+    sy += b*0.015;
+  }
+  if(f.walking){
+    const w=Math.sin(f.animT*0.25);
+    dy += Math.abs(w)*2.2;
+    dx += w*f.facing*1.5;
+    sx += w*0.015;
+  }
+  if(f.landT>0){ sx*=1.04; sy*=0.95; dy+=2.5; }
+  if(f.atk){
+    const a=f.atk,d=a.d;
+    if(a.type==='punch'||a.type==='cpunch'){
+      if(a.t<d.startup){ sx*=0.97; sy*=1.03; dx-=f.facing*4; }
+      else if(a.t<d.startup+d.active){ sx*=1.08; dx+=f.facing*7; rot+=0.03*f.facing; }
+      else { sx*=0.99; }
+    } else if(a.type==='kick'||a.type==='ckick'){
+      if(a.t<d.startup){ dx-=f.facing*4; sy*=1.03; }
+      else if(a.t<d.startup+d.active){ sx*=1.09; dx+=f.facing*7; rot+=0.05*f.facing; }
+    } else if(a.type==='jkick'){
+      rot+=0.08*f.facing; dy-=2; dx+=f.facing*3;
+    } else if(a.type==='uppercut'){
+      rot += -0.11*f.facing + Math.min(0.18,a.t*0.012)*f.facing;
+      dx += f.facing*3.5; dy -= Math.min(18, a.t*0.9); sx*=1.03;
+    } else if(a.type==='spin'){
+      rot += Math.sin(a.t*0.8)*0.14*f.facing; dx += f.facing*5; sx*=1.05; sy*=0.99;
+    } else if(a.type==='special'){
+      if(f.def.special==='rush'){
+        dx += f.facing*4; rot += -0.04*f.facing; sx*=1.05;
+      } else {
+        if(a.t<d.startup){ sx*=0.97; sy*=1.04; }
+        else { dx += f.facing*6; sx*=1.06; }
+      }
+    }
+  }
+  return {index,rot,dx,dy,sx,sy};
 }
 
 VAQUERO.speed=.99; VAQUERO.power=1.06;
@@ -355,7 +403,7 @@ class Fighter {
     Object.assign(this, {
       x, y: GROUND, vx: 0, vy: 0, facing, hp: 100, dispHp: 100, onGround: true, crouch: false,
       atk: null, stun: 0, stunType: null, cool: 0, flash: 0, state: 'normal', koT: 0, winPose: false,
-      airAtk: false, holdBack: false, walking: false, animT: 0, pose: clonePose(POSES.idle), hand: [x, GROUND - 140]
+      airAtk: false, holdBack: false, walking: false, animT: 0, landT: 0, inputHist: [], pose: clonePose(POSES.idle), hand: [x, GROUND - 140]
     });
   }
   h() { if (this.state === 'ko') return 50; if (!this.onGround) return 150; return this.crouch ? 120 : 180; }
@@ -408,22 +456,74 @@ function updateFx() {
   if (game.shake > 0) game.shake *= 0.85; if (game.shake < 0.3) game.shake = 0;
 }
 
+
+function relDirCode(f, inp){
+  const F = f.facing===1 ? inp.right : inp.left;
+  const B = f.facing===1 ? inp.left : inp.right;
+  if(inp.down && F) return 3;
+  if(inp.down && B) return 1;
+  if(inp.up && F) return 9;
+  if(inp.up && B) return 7;
+  if(inp.down) return 2;
+  if(inp.up) return 8;
+  if(F) return 6;
+  if(B) return 4;
+  return 5;
+}
+function pushInputHistory(f, inp){
+  const d=relDirCode(f, inp);
+  const last=f.inputHist[f.inputHist.length-1];
+  if(!last || last.d!==d || inp.punch || inp.kick || inp.special){
+    f.inputHist.push({d,p:!!inp.punch,k:!!inp.kick,s:!!inp.special,fr:game.frame});
+    if(f.inputHist.length>24) f.inputHist.shift();
+  }
+}
+function motionMatch(f, seq, maxAge=18){
+  const hist=(f.inputHist||[]).filter(e=>e.d!==5);
+  if(!hist.length) return false;
+  let i=hist.length-1;
+  let lastFrame=hist[i].fr, firstFrame=lastFrame;
+  for(let s=seq.length-1;s>=0;s--){
+    const target=seq[s];
+    let found=false;
+    while(i>=0){
+      if(hist[i].d===target){ firstFrame=hist[i].fr; found=true; i--; break; }
+      i--;
+    }
+    if(!found) return false;
+  }
+  return lastFrame-firstFrame<=maxAge;
+}
+function detectCommandMove(f, inp, projBusy=false){
+  if(!f.onGround || f.atk || f.stun>0 || f.state==='ko') return null;
+  if(inp.kick && motionMatch(f,[6,2,3],18)) return 'uppercut';
+  if(inp.kick && motionMatch(f,[2,1,4],20)) return 'spin';
+  if(inp.punch && !projBusy && (motionMatch(f,[2,3,6],20) || motionMatch(f,[2,6],14))) return 'special';
+  return null;
+}
+
 // ---------------------------------------------------------------------
 //  Lógica de combate
 // ---------------------------------------------------------------------
 function startAttack(f, type) {
-  const base = type === 'special' ? f.def.specialData : ATTACKS[type]; const d = {...base, dmg: Math.round(base.dmg * (type === 'special' ? 1 : (f.def.power || 1)))};
+  const base = type === 'special' ? f.def.specialData : ATTACKS[type];
+  const d = {...base, dmg: Math.round(base.dmg * (type === 'special' ? 1 : (f.def.power || 1)))};
   f.atk = { type, d, t: 0, hit: false };
   if (f.onGround) { f.vx = 0; f.crouch = (type === 'cpunch' || type === 'ckick'); }
-  if (type === 'special') {
-    f.cool = d.cool; sfx('special');
-    floats.push({ text: f.def.specialName, x: f.x, y: f.y - 230, t: 0, col: f.def.c.accent });
+  if (type === 'special' || type === 'uppercut' || type === 'spin') {
+    if (d.cool) f.cool = d.cool;
+    sfx(type === 'special' ? 'special' : 'heavy');
+    const moveText = type === 'special' ? f.def.specialName : d.moveName;
+    floats.push({ text: moveText, x: f.x, y: f.y - 230, t: 0, col: f.def.c.accent });
   }
 }
 function runAttack(f) {
   const a = f.atk, d = a.d; a.t++;
   if (a.t === d.startup) {
-    if (!d.projectile && a.type !== 'special') sfx('swing');
+    if (!d.projectile && a.type !== 'special' && a.type !== 'uppercut') sfx('swing');
+    if (a.type === 'uppercut') {
+      f.crouch = false; f.onGround = false; f.vy = d.launchVy; f.vx = d.launchVx * f.facing; dust(f.x, f.y);
+    }
     if (d.projectile) {
       projectiles.push({ x: f.x + f.facing * 72, y: f.y - 118, dir: f.facing, vx: d.speed * f.facing, owner: f, t: 0, d });
     }
@@ -432,6 +532,12 @@ function runAttack(f) {
     const act = a.t >= d.startup && a.t < d.startup + d.active;
     if (act && !a.hit) { f.vx = d.dash * f.facing; if (a.t % 3 === 0) dust(f.x - f.facing * 20, f.y); }
     else f.vx *= 0.7;
+  }
+  if (a.type === 'uppercut') {
+    if (a.t >= d.startup && !f.onGround) f.vx = d.launchVx * 0.92 * f.facing;
+    if (a.t >= d.startup + d.active + d.recovery && f.onGround) { f.atk = null; f.crouch = false; }
+    else if (a.t > d.startup + d.active + d.recovery + 20) { f.atk = null; f.crouch = false; }
+    return;
   }
   if (a.type === 'jkick') { if (f.onGround) f.atk = null; return; }
   if (a.t >= d.startup + d.active + d.recovery) { f.atk = null; f.crouch = false; }
@@ -483,6 +589,7 @@ function knockOut(att, def, dir) {
 //  Física
 // ---------------------------------------------------------------------
 function physics(f) {
+  if (f.landT > 0) f.landT--;
   if (!f.onGround) f.vy += 0.9;
   f.x += f.vx; f.y += f.vy;
   if (f.y >= GROUND) {
@@ -491,7 +598,7 @@ function physics(f) {
       if (f.state === 'ko' && f.vy > 5) {
         f.vy = -f.vy * 0.35; f.vx *= 0.6; dust(f.x, f.y); game.shake = Math.max(game.shake, 6); sfx('land');
       } else {
-        f.onGround = true; f.vy = 0;
+        f.onGround = true; f.vy = 0; f.landT = 5;
         if (f.state !== 'ko') {
           f.vx = 0; f.airAtk = false;
           if (f.atk && f.atk.type === 'jkick') f.atk = null;
@@ -521,6 +628,7 @@ function separate(a, b) {
 // ---------------------------------------------------------------------
 function updateFighter(f, inp, o) {
   f.animT++;
+  pushInputHistory(f, inp);
   if (f.flash > 0) f.flash--;
   if (f.cool > 0) f.cool--;
   f.dispHp = f.dispHp > f.hp ? Math.max(f.hp, f.dispHp - 0.35) : f.hp;
@@ -539,7 +647,9 @@ function updateFighter(f, inp, o) {
   } else if (f.onGround) {
     f.crouch = inp.down;
     const projBusy = f.def.specialData.projectile && projectiles.some(p => p.owner === f);
-    if (inp.special && f.cool <= 0 && !projBusy) startAttack(f, 'special');
+    const cmd = f.cool <= 0 ? detectCommandMove(f, inp, projBusy) : null;
+    if (cmd) startAttack(f, cmd);
+    else if (inp.special && f.cool <= 0 && !projBusy) startAttack(f, 'special');
     else if (inp.punch) startAttack(f, f.crouch ? 'cpunch' : 'punch');
     else if (inp.kick) startAttack(f, f.crouch ? 'ckick' : 'kick');
     else if (inp.up) {
@@ -564,6 +674,8 @@ function targetPose(f, o) {
   else if (f.atk) {
     const a = f.atk, d = a.d;
     if (a.type === 'jkick') name = a.t >= d.startup ? 'jkick' : 'jump';
+    else if (a.type === 'uppercut') name = a.t < d.startup ? 'charge' : 'jkick';
+    else if (a.type === 'spin') name = a.t < d.startup ? 'charge' : 'kick';
     else if (a.t < d.startup && d.poseStart) name = d.poseStart;
     else if (a.t < d.startup + d.active + (d.projectile ? 10 : 2)) name = d.pose;
     else name = f.crouch ? 'crouch' : 'idle';
@@ -572,7 +684,8 @@ function targetPose(f, o) {
   else {
     const threat = (o.atk && Math.abs(o.x - f.x) < 260) || projectiles.some(p => p.owner === o && Math.abs(p.x - f.x) < 220);
     const blocking = f.stunType === 'block' || (f.holdBack && threat);
-    if (f.crouch) name = blocking ? 'cblock' : 'crouch';
+    if (f.landT > 0) name = 'crouch';
+    else if (f.crouch) name = blocking ? 'cblock' : 'crouch';
     else if (blocking) name = 'block';
     else if (f.winPose) name = 'win';
   }
@@ -581,10 +694,12 @@ function targetPose(f, o) {
     const b = Math.sin(f.animT * 0.08);
     p.lean += b * 1.5; p.fU += b * 0.05; p.bU += b * 0.05;
     if (f.walking) {
-      const s = Math.sin(f.animT * 0.28);
-      p.fT += s * 0.38; p.bT -= s * 0.38; p.fS += Math.max(0, -s) * 0.3; p.bS -= Math.max(0, s) * 0.3;
+      const s = Math.sin(f.animT * 0.38);
+      p.fT += s * 0.48; p.bT -= s * 0.48; p.fS += Math.max(0, -s) * 0.45; p.bS -= Math.max(0, s) * 0.45;
+      p.lean += s * 3.5;
     }
   }
+  if (name === 'jump') p.lean += clamp(-f.vy * 0.8, -10, 10);
   if (name === 'win') { const b = Math.sin(f.animT * 0.15); p.bU += b * 0.08; }
   return p;
 }
@@ -882,21 +997,22 @@ function exprOf(f) {
   return 'normal';
 }
 function drawFighter(g, f, alpha = 1, offX = 0) {
-  const im=spriteFor(f.def,spritePose(f));
+  const spr=spriteAnimData(f);
+  const im=spriteFor(f.def,spr.index);
   if(validSprite(im)){
-    // Dibujo en el mismo sistema de coordenadas y escala que el motor original.
     const crouched=f.crouch && !f.atk;
-    const bodyH=crouched?188:216;
+    const bodyH=crouched?220:250;
     const bodyW=bodyH;
-    const hover=(!f.atk && f.onGround && !f.crouch)?Math.sin(f.animT*.09)*1.5:0;
     g.save();g.globalAlpha=alpha;
-    g.translate(f.x+offX,f.y-4+hover);g.scale(f.facing,1);
+    g.translate(f.x+offX+spr.dx,f.y-4+spr.dy);
+    g.scale(f.facing*spr.sx,spr.sy);
+    if(spr.rot)g.rotate(spr.rot);
     if(f.state==='ko'){const k=Math.min(1,f.koT/22);g.rotate(-k*1.4);}
     if(f.flash>0&&f.flash%4<2)g.filter='brightness(2)';
     g.imageSmoothingEnabled=false;
     g.drawImage(im,-bodyW*.5,-bodyH,bodyW,bodyH);
     g.restore();
-    if(alpha===1&&offX===0)f.hand=[f.x+f.facing*38,f.y-126];
+    if(alpha===1&&offX===0)f.hand=[f.x+f.facing*48,f.y-145];
     return;
   }
 
@@ -1196,8 +1312,8 @@ function drawHUD() {
   const tc = game.timer <= 10 && (game.frame >> 4) % 2 === 0;
   arcadeText(String(game.timer).padStart(2, '0'), W / 2, 50, 48, tc ? '#ffffff' : '#fff2a0', tc ? '#ff2a2a' : '#ff9a00');
   if (game.state === 'fight' || game.state === 'intro') {
-    if(!matchMedia('(pointer:coarse), (any-pointer:coarse)').matches) smallText('J1: A/D mover  W salto  S agachar  F puño  G patada  R especial  | Atrás = bloquear', W / 2, H - 14, 12, 'rgba(255,255,255,.75)');
-    if (!p2Human && !matchMedia('(pointer:coarse), (any-pointer:coarse)').matches) smallText('Pulsa flechas / K L P para que juegue el J2', W / 2, H - 30, 12, 'rgba(255,220,150,.75)');
+    if(!matchMedia('(pointer:coarse), (any-pointer:coarse)').matches) smallText('J1: A/D mover  W salto  S agachar  F puño  G patada  R especial  |  DEFENSA: ATRÁS', W / 2, H - 14, 12, 'rgba(255,255,255,.75)');
+    if (!p2Human && !matchMedia('(pointer:coarse), (any-pointer:coarse)').matches) smallText('COMBOS J1: S,D+F = especial  |  D,S,D+G = ascendente  |  S,A+G = giro tornado', W / 2, H - 30, 12, 'rgba(255,220,150,.85)');
   }
 }
 function drawTitle() {
@@ -1230,9 +1346,10 @@ function drawTitle() {
     if(sel) arcadeText('1P',x+21,y-8,22,'#ffffff','#ff542a');
   }
   smallText('TOCA TU PERSONAJE O USA A / D  ·  ENTER PARA LUCHAR',W/2,431,17,'#fff2b1');
-  smallText('C: MODO '+(p2Human?'2 JUGADORES':'CONTRA CPU')+'      |      PRIMERO EN GANAR 2 RONDAS',W/2,460,15,'#b6d7ff');
-  smallText('J1: A D W S + F G R    |    J2: FLECHAS + K L P',W/2,488,14,'#ffffff');
-  if((game.stateT>>5)%2===0) arcadeText('¡PULSA ENTER O TOCA LUCHAR!',W/2,518,23,'#ffffff','#ffb022');
+  smallText('COMBOS: ↓↘→ + PUÑO = ESPECIAL  ·  →↓↘ + PATADA = ASCENDENTE  ·  ↓↙← + PATADA = GIRO',W/2,450,14,'#ffdcb0');
+  smallText('C: MODO '+(p2Human?'2 JUGADORES':'CONTRA CPU')+'      |      PRIMERO EN GANAR 2 RONDAS',W/2,472,15,'#b6d7ff');
+  smallText('J1: A D W S + F G R    |    J2: FLECHAS + K L P    |    ESPECIALES POR COMBINACIÓN',W/2,500,14,'#ffffff');
+  if((game.stateT>>5)%2===0) arcadeText('¡PULSA ENTER O TOCA LUCHAR!',W/2,524,23,'#ffffff','#ffb022');
   ctx.restore();
 }
 
@@ -1273,8 +1390,9 @@ function drawOverlay() {
 function render() {
   updateTouchUi();
   bx.setTransform(1, 0, 0, 1, 0, 0);
+  bx.clearRect(0, 0, W, H);
   bx.drawImage(bgC, 0, 0);
-  bx.setTransform(.5, 0, 0, .5, 0, 0);
+  bx.setTransform(1, 0, 0, 1, 0, 0);
   // brillo de los farolillos
   for (const [lx, ly] of [[95, 262], [505, 262], [910, 217]]) {
     const fl = 0.28 + Math.sin(game.frame * 0.2 + lx) * 0.04 + rand() * 0.03;

@@ -1,0 +1,15 @@
+MARCHERITO FIGHTERS HD
+
+Novedades:
+- Sprites HD (512x512) para los 6 luchadores.
+- Render a resolución completa para una imagen más limpia.
+- Animaciones más fluidas con transiciones de idle, paso, aterrizaje y recuperación.
+- Nuevos movimientos especiales por combinación.
+
+Combinaciones:
+- ↓↘→ + PUÑO = especial del personaje
+- →↓↘ + PATADA = golpe ascendente
+- ↓↙← + PATADA = giro tornado
+
+Teclado J1: A D W S + F G R
+Teclado J2: flechas + K L P
