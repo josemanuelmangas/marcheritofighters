@@ -1,0 +1,20 @@
+MARCHERITO FIGHTERS · EDICIÓN B · ANIMACIÓN AMPLIADA
+
+Abre index.html en Chrome/Edge o publica todo el contenido de esta carpeta en GitHub Pages.
+Incluye 108 imágenes de animación PNG transparentes de 384 × 384, 18 por luchador.
+
+NOVEDADES
+- Reposo animado, dos pasos, preparación/impacto de puños y patadas, defensa, salto, aterrizaje, reacción al golpe, victoria y especial.
+- Dragon, Toro Vaquero y El Fuego: fotogramas generados a partir de hojas nuevas, con algunas poses originales preservadas para evitar cortes.
+- El Patrón, El Comando y El Calavera: 18 fotogramas derivados de las seis poses ilustradas originales con ligeras variaciones de postura. NO son 18 dibujos totalmente nuevos para estos tres personajes.
+- El fondo y los retratos están corregidos.
+- Se mantiene el control táctil y con teclado, rondas, modo CPU/2P y movimientos especiales.
+
+CONTROLES JUGADOR 1: A/D desplazar, W saltar, S agachar, F puño, G patada, R especial.
+CONTROLES JUGADOR 2: flechas desplazar/saltar/agachar, K puño, L patada, P especial.
+COMBINACIONES: abajo->diagonal abajo-adelante->adelante + puño = especial;
+ adelante->abajo->diagonal abajo-adelante + patada = ascendente;
+ abajo->diagonal abajo-atras->atras + patada = giro.
+TÁCTIL: cruceta y botones. Para combos, desliza el dedo por las direcciones.
+
+NOTA: los sprites se renderizan a 384x384; en algunos personajes los fotogramas adicionales provienen de transformaciones, no de ilustraciones nuevas. El juego funciona mejor en horizontal.

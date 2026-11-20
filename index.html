@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#080711">
-<title>MARCHERITO FIGHTERS — Edición Arcade</title>
+<title>MARCHERITO FIGHTERS — EDICIÓN B ANIMADA</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;width:100%;height:100%;height:100dvh;background:#080711;overflow:hidden;overscroll-behavior:none}
@@ -298,69 +298,56 @@ const ROSTER = [RYU, VAQUERO, CAMARERO, SOLDADO, FUEGO, CALAVERA];
 // Sprites extraídos de las seis hojas de poses generadas para los personajes.
 // Orden: reposo, avanzar, puñetazo, patada, defensa agachada, salto/ataque aéreo.
 const SPRITE_NAMES = ['dragon','vaquero','patron','comando','fuego','calavera'];
-const spriteSheets = SPRITE_NAMES.map(name => Array.from({length:6},(_,i)=>{
-  const im=new Image(); im.src=`sprites_hd/${name}_${i}.png`;return im;
+const spriteSheets = SPRITE_NAMES.map(name => Array.from({length:18},(_,i)=>{
+  const im=new Image(); im.decoding='async'; im.src=`sprites_anim/${name}_${String(i).padStart(2,'0')}.png`;return im;
 }));
 function spriteFor(def,index=0) {const i=ROSTER.indexOf(def);return spriteSheets[Math.max(0,i)]?.[index];}
 function validSprite(im){return im && im.complete && im.naturalWidth>0;}
+// Tabla de animación: 18 fotogramas por personaje, con ciclos vinculados a estados de combate.
+// 0,1 reposo; 2,3 caminar; 4,5 puñetazo; 6,7 patada; 8,9 defensa; 10,11 salto;
+// 12,13 recibir golpe; 14 recuperación; 15 victoria; 16,17 especial.
 function spritePose(f){
-  if(f.state==='ko'||f.stunType==='hit')return 4;
+  const t=f.animT;
+  if(f.state==='ko')return 13;
+  if(f.stunType==='hit')return f.stun>8?12:13;
+  if(f.stunType==='block')return 9;
   if(f.atk){
-    const t=f.atk.type;
-    if(t==='uppercut')return 5;
-    if(t==='spin')return f.atk.t < f.atk.d.startup ? 1 : 3;
-    if(t==='jkick')return 5;
-    if(t==='kick'||t==='ckick')return 3;
-    if(t==='cpunch'||t==='punch')return 2;
-    if(t==='special')return f.def.special==='rush' ? (f.atk.t < f.atk.d.startup ? 1 : 5) : (f.atk.t < f.atk.d.startup ? 0 : 2);
+    const a=f.atk,d=a.d,fr=a.t;
+    if(a.type==='uppercut') return fr<d.startup?6:(fr<d.startup+d.active?11:14);
+    if(a.type==='spin')return fr<d.startup?6:(fr<d.startup+d.active?7:14);
+    if(a.type==='jkick')return fr<d.startup?10:11;
+    if(a.type==='special')return fr<d.startup?16:(fr<d.startup+d.active?17:14);
+    if(a.type==='punch'||a.type==='cpunch')return fr<d.startup?4:(fr<d.startup+d.active?5:14);
+    if(a.type==='kick'||a.type==='ckick')return fr<d.startup?6:(fr<d.startup+d.active?7:14);
   }
-  if(!f.onGround)return 5;
-  if(f.landT>0)return 4;
-  if(f.crouch||f.stunType==='block'||(f.holdBack&&!f.walking))return 4;
-  if(f.walking)return (Math.floor(f.animT/8)%2) ? 1 : 0;
-  if(f.winPose)return (Math.floor(f.animT/18)%2) ? 2 : 0;
-  return 0;
+  if(!f.onGround)return f.vy<0?10:11;
+  if(f.landT>0)return 14;
+  if(f.crouch||f.holdBack&&!f.walking)return (Math.floor(t/12)%2)?8:9;
+  if(f.winPose)return 15;
+  if(f.walking)return (Math.floor(t/7)%2)?2:3;
+  return (Math.floor(t/24)%2)?0:1;
 }
 function spriteAnimData(f){
   const index=spritePose(f);
   let rot=0,dx=0,dy=0,sx=1,sy=1;
+  // Exaggerated 16-bit arcade secondary motion, on top of hand-drawn/generated cels.
   if(!f.atk&&f.onGround&&!f.crouch){
-    const b=Math.sin(f.animT*0.09);
-    dy += b*1.6;
-    sx += b*0.01;
-    sy += b*0.015;
+    const breathing=Math.sin(f.animT*0.12);
+    dy+=breathing*1.1; sx+=breathing*0.006; sy+=breathing*0.008;
   }
-  if(f.walking){
-    const w=Math.sin(f.animT*0.25);
-    dy += Math.abs(w)*2.2;
-    dx += w*f.facing*1.5;
-    sx += w*0.015;
-  }
-  if(f.landT>0){ sx*=1.04; sy*=0.95; dy+=2.5; }
+  if(f.walking){dy+=Math.abs(Math.sin(f.animT*0.35))*1.6;}
+  if(f.landT>0){sx*=1.02;sy*=0.98;dy+=2.0;}
   if(f.atk){
     const a=f.atk,d=a.d;
     if(a.type==='punch'||a.type==='cpunch'){
-      if(a.t<d.startup){ sx*=0.97; sy*=1.03; dx-=f.facing*4; }
-      else if(a.t<d.startup+d.active){ sx*=1.08; dx+=f.facing*7; rot+=0.03*f.facing; }
-      else { sx*=0.99; }
+      if(a.t<d.startup){dx-=f.facing*2;}
+      else if(a.t<d.startup+d.active){dx+=f.facing*5;}
     } else if(a.type==='kick'||a.type==='ckick'){
-      if(a.t<d.startup){ dx-=f.facing*4; sy*=1.03; }
-      else if(a.t<d.startup+d.active){ sx*=1.09; dx+=f.facing*7; rot+=0.05*f.facing; }
-    } else if(a.type==='jkick'){
-      rot+=0.08*f.facing; dy-=2; dx+=f.facing*3;
-    } else if(a.type==='uppercut'){
-      rot += -0.11*f.facing + Math.min(0.18,a.t*0.012)*f.facing;
-      dx += f.facing*3.5; dy -= Math.min(18, a.t*0.9); sx*=1.03;
-    } else if(a.type==='spin'){
-      rot += Math.sin(a.t*0.8)*0.14*f.facing; dx += f.facing*5; sx*=1.05; sy*=0.99;
-    } else if(a.type==='special'){
-      if(f.def.special==='rush'){
-        dx += f.facing*4; rot += -0.04*f.facing; sx*=1.05;
-      } else {
-        if(a.t<d.startup){ sx*=0.97; sy*=1.04; }
-        else { dx += f.facing*6; sx*=1.06; }
-      }
-    }
+      if(a.t<d.startup){dx-=f.facing*3;}
+      else if(a.t<d.startup+d.active){dx+=f.facing*4;}
+    } else if(a.type==='uppercut'){dx+=f.facing*2;dy-=Math.min(8,a.t*.7);}
+    else if(a.type==='spin'){rot=Math.sin(a.t*.7)*.08*f.facing;}
+    else if(a.type==='special'){dx+=f.facing*(a.t>d.startup?4:0);}
   }
   return {index,rot,dx,dy,sx,sy};
 }
@@ -403,7 +390,7 @@ class Fighter {
     Object.assign(this, {
       x, y: GROUND, vx: 0, vy: 0, facing, hp: 100, dispHp: 100, onGround: true, crouch: false,
       atk: null, stun: 0, stunType: null, cool: 0, flash: 0, state: 'normal', koT: 0, winPose: false,
-      airAtk: false, holdBack: false, walking: false, animT: 0, landT: 0, inputHist: [], pose: clonePose(POSES.idle), hand: [x, GROUND - 140]
+      airAtk: false, holdBack: false, walking: false, animT: 0, landT: 0, inputHist: [], spriteShown: 0, spritePrev: 0, spriteBlend: 1, pose: clonePose(POSES.idle), hand: [x, GROUND - 140]
     });
   }
   h() { if (this.state === 'ko') return 50; if (!this.onGround) return 150; return this.crouch ? 120 : 180; }
@@ -633,7 +620,7 @@ function updateFighter(f, inp, o) {
   if (f.cool > 0) f.cool--;
   f.dispHp = f.dispHp > f.hp ? Math.max(f.hp, f.dispHp - 0.35) : f.hp;
   f.walking = false;
-  if (f.state === 'ko') { f.koT++; physics(f); if (f.onGround) f.vx *= 0.8; updatePose(f, o); return; }
+  if (f.state === 'ko') { f.koT++; physics(f); if (f.onGround) f.vx *= 0.8; updatePose(f, o); updateSpriteTransition(f); return; }
   const fwd = f.facing === 1 ? inp.right : inp.left;
   const back = f.facing === 1 ? inp.left : inp.right;
   f.holdBack = back;
@@ -667,6 +654,7 @@ function updateFighter(f, inp, o) {
   physics(f);
   if (f.onGround && !f.atk && f.stun === 0 && o.state !== 'ko') f.facing = o.x >= f.x ? 1 : -1;
   updatePose(f, o);
+  updateSpriteTransition(f);
 }
 function targetPose(f, o) {
   let name = 'idle';
@@ -707,6 +695,16 @@ function updatePose(f, o) {
   const t = targetPose(f, o);
   const k = f.atk ? 0.5 : 0.25;
   for (const key of PKEYS) f.pose[key] = lerp(f.pose[key], t[key], k);
+}
+function updateSpriteTransition(f){
+  const target = spritePose(f);
+  if(f.spriteShown !== target){
+    f.spritePrev = f.spriteShown;
+    f.spriteShown = target;
+    f.spriteBlend = 0;
+  } else {
+    f.spriteBlend = Math.min(1, f.spriteBlend + 0.22);
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -1000,11 +998,17 @@ function drawFighter(g, f, alpha = 1, offX = 0) {
   const spr=spriteAnimData(f);
   const im=spriteFor(f.def,spr.index);
   if(validSprite(im)){
-    const crouched=f.crouch && !f.atk;
-    const bodyH=crouched?220:250;
-    const bodyW=bodyH;
+    const crouchPose = spr.index===8 || spr.index===9 || (f.crouch && !f.atk) || (f.stunType==='block' && f.crouch);
+    const airPose = !f.onGround || spr.index===10 || spr.index===11;
+    const hitPose = spr.index===12 || spr.index===13 || spr.index===14;
+    const standingH = 292;
+    const crouchH = 228;
+    const airH = 278;
+    const hitH = 284;
+    const bodyH = crouchPose ? crouchH : (airPose ? airH : (hitPose ? hitH : standingH));
+    const bodyW = bodyH;
     g.save();g.globalAlpha=alpha;
-    g.translate(f.x+offX+spr.dx,f.y-4+spr.dy);
+    g.translate(f.x+offX+spr.dx,f.y-2+spr.dy);
     g.scale(f.facing*spr.sx,spr.sy);
     if(spr.rot)g.rotate(spr.rot);
     if(f.state==='ko'){const k=Math.min(1,f.koT/22);g.rotate(-k*1.4);}
@@ -1012,7 +1016,11 @@ function drawFighter(g, f, alpha = 1, offX = 0) {
     g.imageSmoothingEnabled=false;
     g.drawImage(im,-bodyW*.5,-bodyH,bodyW,bodyH);
     g.restore();
-    if(alpha===1&&offX===0)f.hand=[f.x+f.facing*48,f.y-145];
+    if(alpha===1&&offX===0){
+      const hx = crouchPose ? 34 : 48;
+      const hy = crouchPose ? 116 : (airPose ? 148 : 160);
+      f.hand=[f.x+f.facing*hx,f.y-hy];
+    }
     return;
   }
 
@@ -1085,7 +1093,8 @@ function drawProjectile(g, p) {
 // =====================================================================
 function buildBG() {
   const g = bgC.getContext('2d');
-  g.setTransform(.5, 0, 0, .5, 0, 0);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0,0,bgC.width,bgC.height);
   seed = 2024;
   // Cielo de atardecer
   let gr = g.createLinearGradient(0, 0, 0, 440);
@@ -1264,8 +1273,16 @@ function portrait(x, y, f, flip, size = 66) {
   const im=spriteFor(f.def,0);
   if(validSprite(im)){
     ctx.imageSmoothingEnabled=false;
-    // Región superior central de la celda: rostro y pecho, no cuerpo completo.
-    ctx.drawImage(im,65,8,130,116,x-3,y-2,size+6,size+9);
+    const sx=105, sy=12, sw=175, sh=165;
+    if(flip){
+      ctx.save();
+      ctx.translate(x+size, y);
+      ctx.scale(-1,1);
+      ctx.drawImage(im,sx,sy,sw,sh,-6,-2,size+12,size+10);
+      ctx.restore();
+    } else {
+      ctx.drawImage(im,sx,sy,sw,sh,x-6,y-2,size+12,size+10);
+    }
     ctx.restore();ctx.strokeStyle='#f5c542';ctx.lineWidth=3;ctx.strokeRect(x,y,size,size);
     return;
   }
@@ -1346,7 +1363,7 @@ function drawTitle() {
     if(sel) arcadeText('1P',x+21,y-8,22,'#ffffff','#ff542a');
   }
   smallText('TOCA TU PERSONAJE O USA A / D  ·  ENTER PARA LUCHAR',W/2,431,17,'#fff2b1');
-  smallText('COMBOS: ↓↘→ + PUÑO = ESPECIAL  ·  →↓↘ + PATADA = ASCENDENTE  ·  ↓↙← + PATADA = GIRO',W/2,450,14,'#ffdcb0');
+  smallText('108 FOTOGRAMAS · 18 POR LUCHADOR · COMBOS Y ATAQUES ESPECIALES',W/2,450,14,'#ffdcb0');
   smallText('C: MODO '+(p2Human?'2 JUGADORES':'CONTRA CPU')+'      |      PRIMERO EN GANAR 2 RONDAS',W/2,472,15,'#b6d7ff');
   smallText('J1: A D W S + F G R    |    J2: FLECHAS + K L P    |    ESPECIALES POR COMBINACIÓN',W/2,500,14,'#ffffff');
   if((game.stateT>>5)%2===0) arcadeText('¡PULSA ENTER O TOCA LUCHAR!',W/2,524,23,'#ffffff','#ffb022');
