@@ -10,6 +10,7 @@
   html,body{margin:0;width:100%;height:100%;height:100dvh;background:#080711;overflow:hidden;overscroll-behavior:none}
   body{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:system-ui,Arial,sans-serif}
   #game{display:block;flex:none;touch-action:none;image-rendering:pixelated;image-rendering:crisp-edges;box-shadow:0 0 50px rgba(255,140,40,.25)}
+  body.coverScreen #touchDock{display:none!important}
   #touchDock{display:none;flex:none;position:relative;width:100%;max-width:1060px;height:178px;align-items:center;justify-content:space-between;padding:7px max(14px,env(safe-area-inset-right)) 7px max(14px,env(safe-area-inset-left));gap:12px;touch-action:none;user-select:none;-webkit-user-select:none}
   .touchGroup{display:flex;align-items:center;gap:8px}.pad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:3px}
   .touchBtn{appearance:none;border:2px solid #86a8e9;border-radius:14px;background:linear-gradient(160deg,#364b85d9,#111a35ed);color:#fff;font:bold 19px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:0 4px 0 #080e22;min-width:48px;min-height:48px;padding:0;cursor:pointer}
@@ -40,6 +41,7 @@
  </div>
  <div id="touchMenu">
   <button class="touchBtn" id="touchMode" aria-label="Cambiar modo">CPU / 2P</button>
+  <button class="touchBtn" id="touchWho" aria-label="Elegir jugador a configurar">ELIGIENDO J1</button>
   <button class="touchBtn" id="touchStart" aria-label="Comenzar combate">▶ LUCHAR</button>
  </div>
  <div class="touchGroup gameTouch actions" aria-label="Ataques">
@@ -128,7 +130,9 @@ function noise(dur, vol, freq) {
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f); f.connect(g); g.connect(AC.destination); s.start(t); s.stop(t + dur + 0.02);
 }
+let soundEnabled = true;
 function sfx(n) {
+  if(!soundEnabled) return;
   switch (n) {
     case 'swing': noise(0.08, 0.12, 2500); break;
     case 'hit': noise(0.15, 0.5, 900); tone(150, 0.14, 'square', 0.2, 50); break;
@@ -163,11 +167,12 @@ addEventListener('keydown', e => {
   if (P2CODES.includes(e.code) && !p2Human && game.state === 'fight') {
     p2Human = true; banner('¡JUGADOR 2 SE UNE AL COMBATE!');
   }
-  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code) || e.code.startsWith('Numpad')) e.preventDefault();
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code) || (e.code==='Tab' && game.state==='title') || e.code.startsWith('Numpad')) e.preventDefault();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 // Entradas táctiles simultáneas con Pointer Events: teclado y pantalla se pueden combinar.
+let touchAlwaysVisible = false;
 const touchHeld={left:false,right:false,up:false,down:false,punch:false,kick:false,special:false};
 const touchPressed={punch:false,kick:false,special:false};
 const touchPointers=new Map();
@@ -198,31 +203,76 @@ function readInput(map, includeTouch=false) {
   return input;
 }
 function clearTouchEdges(){for(const key of Object.keys(touchPressed))touchPressed[key]=false;}
-function beginSelectedMatch(){rivalSelection=(selection+1+Math.floor(Math.random()*5))%6;startMatch();}
+function beginSelectedMatch(){startMatch();}
 document.getElementById('touchStart').addEventListener('click',()=>{
   initAudio();if(AC&&AC.state==='suspended')AC.resume();
   if(game.state==='title')beginSelectedMatch();
+  else if(game.state==='cover')coverAction(coverChoice);
+  else if(game.state==='options'||game.state==='credits')returnToCover();
   else if(game.state==='victory'){game.state='title';game.stateT=0;}
 });
-document.getElementById('touchMode').addEventListener('click',()=>{p2Human=!p2Human;sfx('tick');});
+document.getElementById('touchMode').addEventListener('click',()=>{p2Human=!p2Human;selectionTarget= p2Human ? 1 : 0;sfx('tick');});
+document.getElementById('touchWho').addEventListener('click',()=>{selectionTarget=1-selectionTarget;sfx('tick');});
 // Pulsar una tarjeta en la pantalla de selección elige al luchador.
 cv.addEventListener('pointerdown',e=>{
-  if(game.state!=='title')return;
   const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;
+  if(game.state==='cover'){
+    for(let i=0;i<4;i++){const b=COVER_BUTTONS[i];if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h){coverChoice=i;coverAction(i);break;}}
+    return;
+  }
+  if(game.state==='options'){ if(x>=200&&x<=760&&y>=196&&y<=269){toggleCoverOption(0);}else if(x>=200&&x<=760&&y>=280&&y<=354){toggleCoverOption(1);}else if(y>=390){returnToCover();}return;}
+  if(game.state==='credits'){returnToCover();return;}
+  if(game.state!=='title')return;
   const col=Math.floor((x-100)/260),row=Math.floor((y-145)/129);
   if(col>=0&&col<3&&row>=0&&row<2){
     const dx=x-(100+col*260),dy=y-(145+row*129);
-    if(dx>=0&&dx<=242&&dy>=0&&dy<=117){selection=row*3+col;initAudio();sfx('tick');}
+    if(dx>=0&&dx<=242&&dy>=0&&dy<=117){
+      if(selectionTarget===0)selection=row*3+col;else rivalSelection=row*3+col;
+      initAudio();sfx('tick');
+    }
   } else if(y>=495){initAudio();beginSelectedMatch();}
   else if(y>=447&&y<480){p2Human=!p2Human;sfx('tick');}
 });
-if(new URLSearchParams(location.search).has('touch'))document.body.classList.add('forceTouch');
+if(new URLSearchParams(location.search).has('touch')){touchAlwaysVisible=true;document.body.classList.add('forceTouch');}
 function updateTouchUi(){
+  const cover=game.state==='cover'||game.state==='options'||game.state==='credits';
+  if(document.body.classList.contains('coverScreen')!==cover){document.body.classList.toggle('coverScreen',cover);fit();}
   const isMenu=game.state==='title'||game.state==='victory';
   document.body.classList.toggle('menuTouch',isMenu);
   document.getElementById('touchStart').textContent=game.state==='victory'?'↩ ELEGIR PERSONAJE':'▶ LUCHAR';
   document.getElementById('touchMode').textContent=p2Human?'MODO: 2 JUGADORES':'MODO: CPU';
+  document.getElementById('touchWho').textContent=selectionTarget===0?'ELIGIENDO J1':'ELIGIENDO J2';
 }
+
+
+// Portada arcade con hotspots coincidentes con los botones pintados en la imagen.
+let coverChoice=0;
+const COVER_BUTTONS=[
+  {x:356,y:365,w:235,h:37,label:'JUGAR'},
+  {x:372,y:408,w:210,h:30,label:'2 JUGADORES'},
+  {x:372,y:442,w:210,h:30,label:'OPCIONES'},
+  {x:372,y:478,w:210,h:30,label:'CRÉDITOS'}
+];
+function returnToCover(){game.state='cover';game.stateT=0;fit();}
+function coverAction(i){
+  initAudio();if(AC&&AC.state==='suspended')AC.resume();sfx('tick');
+  if(i===0||i===1){p2Human=(i===1);selectionTarget=i===1?1:0;game.state='title';game.stateT=0;fit();}
+  else if(i===2){game.state='options';game.stateT=0;fit();}
+  else if(i===3){game.state='credits';game.stateT=0;fit();}
+}
+function toggleCoverOption(i){
+  if(i===0){soundEnabled=!soundEnabled;}
+  else {touchAlwaysVisible=!touchAlwaysVisible;document.body.classList.toggle('forceTouch',touchAlwaysVisible);fit();}
+  if(soundEnabled)sfx('tick');
+}
+cv.addEventListener('pointermove',e=>{
+  if(game.state!=='cover')return;
+  const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;
+  let candidate=-1;
+  for(let i=0;i<4;i++){const b=COVER_BUTTONS[i];if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h)candidate=i;}
+  cv.style.cursor=candidate<0?'default':'pointer';
+  if(candidate>=0)coverChoice=candidate;
+});
 
 // ---------------------------------------------------------------------
 //  Datos de ataques (fotogramas a 60 fps; cajas en coords locales mirando a la derecha)
@@ -354,8 +404,9 @@ function spriteAnimData(f){
 
 VAQUERO.speed=.99; VAQUERO.power=1.06;
 CALAVERA.speed=1.05; CALAVERA.power=1;
-let selection=0, rivalSelection=5;
+let selection=0, rivalSelection=5, selectionTarget=0;
 const referenceImage = new Image(); referenceImage.src = 'PERSONAJES.jpeg';
+const coverImage = new Image(); coverImage.src = 'PORTADA_MARCHERITO.png';
 
 // ---------------------------------------------------------------------
 //  Poses (ángulos absolutos: 0 = hacia abajo, + = hacia delante)
@@ -404,7 +455,7 @@ let projectiles = [], parts = [], sparks = [], floats = [];
 // ---------------------------------------------------------------------
 //  Estado global
 // ---------------------------------------------------------------------
-const game = { state: 'title', stateT: 0, round: 1, wins: [0, 0], timer: 99, timerF: 0,
+const game = { state: 'cover', stateT: 0, round: 1, wins: [0, 0], timer: 99, timerF: 0,
                hitstop: 0, slow: 0, shake: 0, winner: null, loser: null, banner: null, frame: 0 };
 function banner(text) { game.banner = { text, t: 150 }; }
 
@@ -784,11 +835,40 @@ function updateProjectiles() {
 // ---------------------------------------------------------------------
 function update() {
   game.frame++;
+  if(game.state==='cover'){
+    game.stateT++;
+    if(pressed.ArrowDown||pressed.KeyS){coverChoice=(coverChoice+1)%4;sfx('tick');}
+    if(pressed.ArrowUp||pressed.KeyW){coverChoice=(coverChoice+3)%4;sfx('tick');}
+    if(pressed.Enter||pressed.Space){coverAction(coverChoice);}
+    pressed={};clearTouchEdges();return;
+  }
+  if(game.state==='options'){
+    game.stateT++;
+    if(pressed.Digit1||pressed.KeyS)toggleCoverOption(0);
+    if(pressed.Digit2||pressed.KeyT)toggleCoverOption(1);
+    if(pressed.Escape||pressed.Backspace||pressed.Enter)returnToCover();
+    pressed={};clearTouchEdges();return;
+  }
+  if(game.state==='credits'){
+    game.stateT++;
+    if(pressed.Escape||pressed.Backspace||pressed.Enter||pressed.Space)returnToCover();
+    pressed={};clearTouchEdges();return;
+  }
   updateFx();
   if (game.state === 'title' || game.state === 'victory') {
     game.stateT++;
-    if (game.state === 'title') { if (pressed.ArrowLeft || pressed.KeyA) { selection=(selection+5)%6; sfx('tick'); } if (pressed.ArrowRight || pressed.KeyD) { selection=(selection+1)%6; sfx('tick'); } if (pressed.ArrowUp || pressed.KeyW) { selection=(selection+3)%6; sfx('tick'); } if (pressed.ArrowDown || pressed.KeyS) { selection=(selection+3)%6; sfx('tick'); } if (pressed.Enter || pressed.Space) beginSelectedMatch(); } else if (pressed.Space || pressed.Enter) { game.state='title'; game.stateT=0; }
-    if (pressed.KeyC) { p2Human = !p2Human; sfx('tick'); }
+    if (game.state === 'title') {
+      // J1 uses WASD; J2 (or selected CPU opponent) uses arrow keys.
+      if(pressed.KeyA){selection=(selection+5)%6;sfx('tick');}
+      if(pressed.KeyD){selection=(selection+1)%6;sfx('tick');}
+      if(pressed.KeyW||pressed.KeyS){selection=(selection+3)%6;sfx('tick');}
+      if(pressed.ArrowLeft){rivalSelection=(rivalSelection+5)%6;sfx('tick');}
+      if(pressed.ArrowRight){rivalSelection=(rivalSelection+1)%6;sfx('tick');}
+      if(pressed.ArrowUp||pressed.ArrowDown){rivalSelection=(rivalSelection+3)%6;sfx('tick');}
+      if(pressed.Enter||pressed.Space)beginSelectedMatch();
+    } else if(pressed.Space||pressed.Enter){game.state='title';game.stateT=0;}
+    if(pressed.KeyC){p2Human=!p2Human;selectionTarget=p2Human?1:0;sfx('tick');}
+    if(pressed.Tab){selectionTarget=1-selectionTarget;sfx('tick');}
     updateFighter(p1, EMPTY, p2); updateFighter(p2, EMPTY, p1);
     pressed = {}; clearTouchEdges(); return;
   }
@@ -1008,7 +1088,8 @@ function drawFighter(g, f, alpha = 1, offX = 0) {
     const bodyH = crouchPose ? crouchH : (airPose ? airH : (hitPose ? hitH : standingH));
     const bodyW = bodyH;
     g.save();g.globalAlpha=alpha;
-    g.translate(f.x+offX+spr.dx,f.y-2+spr.dy);
+    const groundSink = crouchPose ? 7 : (airPose ? 2 : 5);
+    g.translate(f.x+offX+spr.dx,f.y+groundSink+spr.dy);
     g.scale(f.facing*spr.sx,spr.sy);
     if(spr.rot)g.rotate(spr.rot);
     if(f.state==='ko'){const k=Math.min(1,f.koT/22);g.rotate(-k*1.4);}
@@ -1018,7 +1099,7 @@ function drawFighter(g, f, alpha = 1, offX = 0) {
     g.restore();
     if(alpha===1&&offX===0){
       const hx = crouchPose ? 34 : 48;
-      const hy = crouchPose ? 116 : (airPose ? 148 : 160);
+      const hy = crouchPose ? 109 : (airPose ? 146 : 155);
       f.hand=[f.x+f.facing*hx,f.y-hy];
     }
     return;
@@ -1344,25 +1425,27 @@ function drawTitle() {
   shade.addColorStop(0,'rgba(6,5,22,.91)');shade.addColorStop(.42,'rgba(8,5,25,.65)');shade.addColorStop(1,'rgba(8,4,20,.94)');
   ctx.fillStyle=shade;ctx.fillRect(0,0,W,H);
   arcadeText('MARCHERITO FIGHTERS',W/2,57,64,'#fff6ba','#ff6d21');
-  smallText('SELECT YOUR FIGHTER  •  ELIGE TU LUCHADOR',W/2,112,19,'#fbe7c4');
+  smallText('J1: A W S D    •    J2: FLECHAS    •    TOCA J1/J2 PARA ELEGIR',W/2,112,17,'#fbe7c4');
   const x0=100,y0=145,cw=242,ch=117,gap=18;
   for(let i=0;i<6;i++) {
-    const x=x0+(i%3)*(cw+gap),y=y0+Math.floor(i/3)*(ch+12),def=ROSTER[i],sel=i===selection;
-    ctx.fillStyle=sel?'#322d63':'rgba(12,15,35,.88)';ctx.fillRect(x,y,cw,ch);
-    ctx.strokeStyle=sel?'#ffe359':'#68769b';ctx.lineWidth=sel?5:2;ctx.strokeRect(x,y,cw,ch);
-    if(sel) {ctx.fillStyle='#ffe359';ctx.fillRect(x+4,y+4,cw-8,4);}
+    const x=x0+(i%3)*(cw+gap),y=y0+Math.floor(i/3)*(ch+12),def=ROSTER[i],sel=i===selection,sel2=i===rivalSelection;
+    ctx.fillStyle=sel&&sel2?'#41305d':sel?'#322d63':sel2?'#223c68':'rgba(12,15,35,.88)';ctx.fillRect(x,y,cw,ch);
+    ctx.strokeStyle=sel?'#ffe359':sel2?'#56d6ff':'#68769b';ctx.lineWidth=sel||sel2?4:2;ctx.strokeRect(x,y,cw,ch);
+    if(sel){ctx.fillStyle='#ffe359';ctx.fillRect(x+4,y+4,cw-8,4);}
+    if(sel2){ctx.fillStyle='#56d6ff';ctx.fillRect(x+4,y+ch-9,cw-8,5);}
     ctx.save();ctx.beginPath();ctx.rect(x+5,y+7,90,91);ctx.clip();
     const im=spriteFor(def,0);
     if(validSprite(im)){
       ctx.imageSmoothingEnabled=false;ctx.drawImage(im,x+5,y+4,97,99);
     }else{ctx.translate(x+48,y+48);ctx.scale(1.35,1.35);drawBust(ctx,def.c,'angry');}
     ctx.restore();
-    smallText(def.name,x+104,y+35,16,sel?'#ffe359':'#ffffff','left');
+    smallText(def.name,x+104,y+35,16,sel?'#ffe359':sel2?'#56d6ff':'#ffffff','left');
     smallText(def.special==='rush'?'EMBESTIDA':'PROYECTIL',x+104,y+60,12,'#b6d7ff','left');
     smallText('PODER '+Math.round((def.power||1)*100)+'%',x+104,y+82,12,'#ffb48a','left');
-    if(sel) arcadeText('1P',x+21,y-8,22,'#ffffff','#ff542a');
+    if(sel) arcadeText('J1',x+22,y-9,19,'#ffffff','#ff9a24');
+    if(sel2) arcadeText(p2Human?'J2':'CPU',x+cw-28,y+ch+10,18,'#ffffff','#18a5db');
   }
-  smallText('TOCA TU PERSONAJE O USA A / D  ·  ENTER PARA LUCHAR',W/2,431,17,'#fff2b1');
+  smallText('J1: A/D/W/S  •  J2: FLECHAS  •  TOCA TARJETA PARA '+(selectionTarget===0?'J1':'J2'),W/2,431,16,'#fff2b1');
   smallText('108 FOTOGRAMAS · 18 POR LUCHADOR · COMBOS Y ATAQUES ESPECIALES',W/2,450,14,'#ffdcb0');
   smallText('C: MODO '+(p2Human?'2 JUGADORES':'CONTRA CPU')+'      |      PRIMERO EN GANAR 2 RONDAS',W/2,472,15,'#b6d7ff');
   smallText('J1: A D W S + F G R    |    J2: FLECHAS + K L P    |    ESPECIALES POR COMBINACIÓN',W/2,500,14,'#ffffff');
@@ -1402,10 +1485,45 @@ function drawOverlay() {
 }
 
 // =====================================================================
+//  PORTADA / OPCIONES / CRÉDITOS
+// =====================================================================
+function drawCover(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#100b24';ctx.fillRect(0,0,W,H);
+  if(coverImage.complete&&coverImage.naturalWidth){
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(coverImage,0,0,W,H);
+  }else{arcadeText('MARCHERITO FIGHTERS',W/2,145,64,'#ffde8a','#f04b18');}
+  if(game.state==='cover'){
+    const b=COVER_BUTTONS[coverChoice];
+    ctx.save();ctx.strokeStyle='#fff6a2';ctx.lineWidth=3;
+    ctx.shadowColor='#ffb118';ctx.shadowBlur=15;
+    ctx.strokeRect(b.x,b.y,b.w,b.h);ctx.restore();
+    return;
+  }
+  ctx.fillStyle='rgba(4,8,22,.87)';ctx.fillRect(120,115,720,340);
+  ctx.strokeStyle='#ffb837';ctx.lineWidth=5;ctx.strokeRect(120,115,720,340);
+  if(game.state==='options'){
+    arcadeText('OPCIONES',480,161,54,'#fff0ae','#ff8e22');
+    smallText('1 · SONIDO: '+(soundEnabled?'ACTIVADO':'DESACTIVADO'),480,230,27,'#ffffff');
+    smallText('2 · CONTROLES TÁCTILES: '+(touchAlwaysVisible?'FORZADOS':'AUTOMÁTICOS'),480,309,23,'#ffffff');
+    smallText('TOCA LA OPCIÓN PARA CAMBIARLA',480,377,20,'#ffe4a0');
+    smallText('ESC / INTRO O TOCA AQUÍ PARA VOLVER',480,420,18,'#79ddff');
+  }else{
+    arcadeText('CRÉDITOS',480,165,54,'#fff0ae','#ff8e22');
+    smallText('MARCHERITO FIGHTERS',480,238,27,'#ffffff');
+    smallText('VIDEOJUEGO ARCADE DEL RESTAURANTE MARCHERITO',480,285,18,'#ffffff');
+    smallText('6 LUCHADORES · 2 JUGADORES · CONTROLES TÁCTILES',480,325,17,'#ffe4a0');
+    smallText('ESC / INTRO O TOCA PARA VOLVER',480,413,18,'#79ddff');
+  }
+}
+
+// =====================================================================
 //  Render principal
 // =====================================================================
 function render() {
   updateTouchUi();
+  if(game.state==='cover'||game.state==='options'||game.state==='credits'){drawCover();return;}
   bx.setTransform(1, 0, 0, 1, 0, 0);
   bx.clearRect(0, 0, W, H);
   bx.drawImage(bgC, 0, 0);
@@ -1420,7 +1538,15 @@ function render() {
   // sombras
   for (const f of fighters) {
     const k = clamp(1 - (GROUND - f.y) / 260, .35, 1);
-    bx.globalAlpha = .35 * k; ell(bx, f.x, GROUND + 2, 44 * k, 9 * k, '#000'); bx.globalAlpha = 1;
+    const crouch = f.crouch && f.onGround;
+    const air = !f.onGround;
+    const rx = (crouch ? 48 : 42) * k;
+    const ry = (crouch ? 11 : 9) * k;
+    const sx = f.x + (crouch ? 2 * f.facing : 0);
+    const sy = GROUND + (crouch ? 5 : 4) + (air ? 1 : 0);
+    bx.globalAlpha = (crouch ? 0.39 : 0.33) * k;
+    ell(bx, sx, sy, rx, ry, '#000');
+    bx.globalAlpha = 1;
   }
   // orden de dibujo: el que ataca, delante
   const order = (p2.atk && !p1.atk) || p1.state === 'ko' ? [p1, p2] : [p2, p1];

@@ -1,0 +1,9 @@
+SELECCIÓN INDEPENDIENTE DE PERSONAJES
+
+J1: A/D y W/S
+J2: flechas izquierda/derecha/arriba/abajo
+C: alterna CPU / 2 jugadores
+Los dos personajes se muestran simultáneamente (J1 amarillo, J2 o CPU azul).
+Con pantalla táctil: botón ELIGIENDO J1/J2 para escoger a qué jugador asignar la tarjeta pulsada.
+ENTER: comenzar partida.
+En CPU también puedes escoger al oponente con las flechas.

@@ -1,0 +1,9 @@
+MARCHERITO FIGHTERS — PORTADA INTERACTIVA
+
+Abre index.html o publica el contenido en GitHub Pages. Mantén PORTADA_MARCHERITO.png y sprites_anim/ en la misma carpeta que index.html.
+
+Portada: flechas arriba/abajo y Enter; ratón o toque sobre JUGAR, 2 JUGADORES, OPCIONES o CRÉDITOS.
+JUGAR: pantalla de selección J1 vs CPU.
+2 JUGADORES: selección independiente J1 (WASD) y J2 (flechas).
+OPCIONES: sonido y controles táctiles.
+CRÉDITOS: información general.
